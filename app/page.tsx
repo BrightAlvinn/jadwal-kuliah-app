@@ -53,7 +53,7 @@ interface Workout {
   completed: boolean;
 }
 
-// Data Jadwal Kuliah (Praktik MSI telah dipindah ke Senin 07:30 - 10:50)
+// Jadwal Kuliah (Praktik MSI telah di Senin)
 const schedulesData: ScheduleItem[] = [
   // SENIN
   { no: 5, code: "INF60250", name: "Praktik Manajemen Sistem Informasi", sks: 2, rombel: "Rombel J2", lecturer: "Dr. Agus Qomaruddin Munir S.T., M.Cs.", type: "Praktik", room: "Lab. Elektronika Industri, GEDUNG ELEKTRO", day: "Senin", startTime: "07:30", endTime: "10:50", duration: "3j 20m" },
@@ -64,7 +64,7 @@ const schedulesData: ScheduleItem[] = [
   { no: 6, code: "INF60264", name: "Praktik Scripting Languages", sks: 2, rombel: "Rombel J", lecturer: "Ir. Muhammad Izzuddin Mahali M.Cs.", type: "Praktik", room: "R. AVA A/Lab. Micro, GEDUNG MEDIA", day: "Selasa", startTime: "12:31", endTime: "14:11", duration: "1j 40m" },
   { no: 1, code: "INF60145", name: "Pengembangan Aplikasi Mobile", sks: 1, rombel: "Rombel J", lecturer: "Dzul Fadli Rahman S.Kom., M.Sc.", type: "Teori", room: "R. Kuliah ( RF 6 ), GEDUNG RF", day: "Selasa", startTime: "15:55", endTime: "16:45", duration: "50m" },
 
-  // RABU (Kosong setelah matkul pindah)
+  // RABU (Kosong)
   
   // KAMIS
   { no: 7, code: "INF60273", name: "Scripting Languages", sks: 2, rombel: "Rombel J", lecturer: "Ir. Muhammad Izzuddin Mahali M.Cs.", type: "Teori", room: "R. AVA B Media, GEDUNG MEDIA", day: "Kamis", startTime: "07:30", endTime: "09:10", duration: "1j 40m" },
@@ -83,8 +83,11 @@ export default function Home() {
   const [isDark, setIsDark] = useState(true);
   const [activeTab, setActiveTab] = useState<"kuliah" | "tugas" | "olahraga">("kuliah");
   const [viewMode, setViewMode] = useState<"perHari" | "semua">("perHari");
+  
+  // State Hari & Waktu Dinamis
+  const [todayName, setTodayName] = useState<string>("");
   const [selectedDay, setSelectedDay] = useState<"Senin" | "Selasa" | "Rabu" | "Kamis" | "Jumat">("Senin");
-  const [clock, setClock] = useState({ time: "00:00", date: "Memuat..." });
+  const [clock, setClock] = useState({ time: "00:00:00", date: "Memuat tanggal..." });
 
   // State Tugas
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -109,12 +112,53 @@ export default function Home() {
   const [wDay, setWDay] = useState("Senin");
   const [wTarget, setWTarget] = useState("");
 
+  // Otomatis Deteksi Hari & Jam Saat Web Dibuka
+  useEffect(() => {
+    const updateDateTime = () => {
+      const now = new Date();
+      const dayIndex = now.getDay(); // 0: Minggu, 1: Senin, ..., 5: Jumat, 6: Sabtu
+      const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+      const currentDay = dayNames[dayIndex];
+      setTodayName(currentDay);
+
+      const hh = String(now.getHours()).padStart(2, "0");
+      const mm = String(now.getMinutes()).padStart(2, "0");
+      const ss = String(now.getSeconds()).padStart(2, "0");
+      const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+      setClock({
+        time: `${hh}:${mm}:${ss}`,
+        date: `${currentDay}, ${now.getDate()} ${monthNames[now.getMonth()]} ${now.getFullYear()}`
+      });
+    };
+
+    // Inisialisasi awal hari aktif saat web dibuka
+    const now = new Date();
+    const dayIndex = now.getDay();
+    const mapDay: { [key: number]: "Senin" | "Selasa" | "Rabu" | "Kamis" | "Jumat" } = {
+      1: "Senin",
+      2: "Selasa",
+      3: "Rabu",
+      4: "Kamis",
+      5: "Jumat"
+    };
+
+    if (mapDay[dayIndex]) {
+      setSelectedDay(mapDay[dayIndex]);
+    } else {
+      // Jika Sabtu/Minggu, default ke Senin
+      setSelectedDay("Senin");
+    }
+
+    updateDateTime();
+    const interval = setInterval(updateDateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Sync Preferences & Storage
   useEffect(() => {
     const theme = localStorage.getItem("app_theme_soft");
-    if (theme) {
-      setIsDark(theme === "dark");
-    }
+    if (theme) setIsDark(theme === "dark");
 
     const savedTasks = localStorage.getItem("app_tasks_soft");
     if (savedTasks) {
@@ -144,26 +188,7 @@ export default function Home() {
     localStorage.setItem("app_workouts_soft", JSON.stringify(workouts));
   }, [workouts]);
 
-  // Realtime Timer
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      const hh = String(now.getHours()).padStart(2, "0");
-      const mm = String(now.getMinutes()).padStart(2, "0");
-      const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-      const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-      
-      setClock({
-        time: `${hh}:${mm}`,
-        date: `${dayNames[now.getDay()]}, ${now.getDate()} ${monthNames[now.getMonth()]} ${now.getFullYear()}`
-      });
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Handlers
+  // Handlers Tugas & Olahraga
   const handleAddAssignment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !newDeadline) return;
@@ -196,7 +221,7 @@ export default function Home() {
         type: wType,
         day: wDay,
         title: wTitle,
-        target: wTarget || (wType === "gym" ? "3 Set latihan terukur" : "Pace rileks"),
+        target: wTarget || (wType === "gym" ? "3 Set terukur" : "Pace rileks"),
         completed: false
       }
     ]);
@@ -208,7 +233,33 @@ export default function Home() {
     return schedulesData.filter(s => s.day === selectedDay);
   }, [selectedDay]);
 
-  // Styling Variabel Palet Soft
+  // Cari status kuliah berikutnya hari ini
+  const nextClassToday = useMemo(() => {
+    if (!daysList.includes(todayName as any)) return null;
+    const todayList = schedulesData.filter(s => s.day === todayName);
+    if (todayList.length === 0) return null;
+
+    const [curHour, curMin] = clock.time.split(":").map(Number);
+    const curTotalMin = curHour * 60 + curMin;
+
+    for (const item of todayList) {
+      const [startH, startM] = item.startTime.split(":").map(Number);
+      const [endH, endM] = item.endTime.split(":").map(Number);
+      const startTotalMin = startH * 60 + startM;
+      const endTotalMin = endH * 60 + endM;
+
+      if (curTotalMin >= startTotalMin && curTotalMin <= endTotalMin) {
+        return { status: "ongoing", item };
+      }
+      if (curTotalMin < startTotalMin) {
+        return { status: "upcoming", item, diffMin: startTotalMin - curTotalMin };
+      }
+    }
+
+    return { status: "finished" };
+  }, [todayName, clock.time]);
+
+  // Style Variables (Soft Modern Palette)
   const containerBg = isDark ? "bg-[#090d16] text-slate-200" : "bg-[#f8fafc] text-slate-700";
   const cardBg = isDark ? "bg-[#111726] border-slate-800/80 shadow-sm" : "bg-white border-slate-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.03)]";
   const subtleCard = isDark ? "bg-[#182136] border-slate-800" : "bg-slate-50 border-slate-200/80";
@@ -222,9 +273,9 @@ export default function Home() {
         {/* Top Header */}
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-5 border-slate-200/60 dark:border-slate-800">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Portal Mahasiswa & Aktivitas</h1>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Portal Mahasiswa & Rutinitas</h1>
             <p className={`text-xs mt-1 ${textMuted}`}>
-              Teknologi Informasi — Rombel J &bull; 21 SKS &bull; Pelacak Harian
+              Teknologi Informasi — Rombel J &bull; 21 SKS &bull; Terhubung Otomatis
             </p>
           </div>
 
@@ -263,27 +314,42 @@ export default function Home() {
         {activeTab === "kuliah" && (
           <div className="space-y-6">
             
-            {/* Live Clock & Status Card */}
+            {/* Live Clock & Auto Day Detection Banner */}
             <div className={`p-5 sm:p-6 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${cardBg}`}>
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-400 mb-1 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" /> Waktu Saat Ini
+                  <Clock className="w-3.5 h-3.5" /> Hari Ini: <span className="font-bold">{todayName || "Mendeteksi..."}</span>
                 </div>
                 <h2 className="text-xl sm:text-2xl font-bold">{clock.date}</h2>
-                <p className={`text-xs mt-1 ${textMuted}`}>
-                  Jadwal terorganisir sesuai alur perkuliahan semester ini.
-                </p>
+                <div className={`text-xs mt-1.5 ${textMuted}`}>
+  {nextClassToday?.status === "ongoing" && nextClassToday.item && (
+    <span className="text-emerald-500 font-semibold">
+      Sedang berlangsung: {nextClassToday.item.name} ({nextClassToday.item.startTime} - {nextClassToday.item.endTime})
+    </span>
+  )}
+  {nextClassToday?.status === "upcoming" && nextClassToday.item && (
+    <span>
+      Kuliah berikutnya: <strong className="text-indigo-500 font-semibold">{nextClassToday.item.name}</strong> ({nextClassToday.item.startTime}) &bull; {Math.floor((nextClassToday.diffMin ?? 0) / 60)}j {(nextClassToday.diffMin ?? 0) % 60}m lagi
+    </span>
+  )}
+  {nextClassToday?.status === "finished" && (
+    <span>Seluruh perkuliahan hari ini telah selesai. Selamat beristirahat!</span>
+  )}
+  {!nextClassToday && (
+    <span>Tidak ada jadwal perkuliahan pada hari ini.</span>
+  )}
+</div>
               </div>
 
               <div className={`sm:text-right px-4 py-2.5 rounded-xl border ${subtleCard}`}>
                 <div className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-indigo-600 dark:text-indigo-400">
                   {clock.time}
                 </div>
-                <div className={`text-[10px] font-medium ${textMuted}`}>WIB</div>
+                <div className={`text-[10px] font-medium ${textMuted}`}>WIB (Realtime)</div>
               </div>
             </div>
 
-            {/* Tombol Opsi: Per Hari vs Seluruh Jadwal */}
+            {/* Tombol Opsi Tampilan */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Tampilan:</span>
@@ -315,17 +381,25 @@ export default function Home() {
                 <div className="grid grid-cols-5 gap-2">
                   {daysList.map((day) => {
                     const isSelected = selectedDay === day;
+                    const isToday = todayName === day;
                     const count = schedulesData.filter(s => s.day === day).length;
                     return (
                       <button
                         key={day}
                         onClick={() => setSelectedDay(day)}
-                        className={`py-3 px-2 rounded-xl border transition-all text-center ${
+                        className={`py-3 px-2 rounded-xl border transition-all text-center relative ${
                           isSelected
                             ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
                             : `${cardBg} ${textMuted} hover:border-slate-300 dark:hover:border-slate-700`
                         }`}
                       >
+                        {isToday && (
+                          <span className={`absolute top-1.5 right-1.5 text-[8px] px-1.5 py-0.2 rounded-md font-extrabold uppercase ${
+                            isSelected ? "bg-white/20 text-white" : "bg-indigo-500/10 text-indigo-500 border border-indigo-500/20"
+                          }`}>
+                            Hari Ini
+                          </span>
+                        )}
                         <div className="font-semibold text-xs sm:text-sm">{day}</div>
                         <div className={`text-[10px] mt-0.5 ${isSelected ? "text-indigo-100" : textMuted}`}>
                           {count} matkul
@@ -408,7 +482,7 @@ export default function Home() {
                     <div key={day} className="space-y-3">
                       <div className="flex items-center gap-2">
                         <span className="h-2 w-2 rounded-full bg-indigo-500" />
-                        <h3 className="font-bold text-sm tracking-tight text-slate-800 dark:text-slate-200 uppercase">
+                        <h3 className="font-bold text-sm tracking-tight uppercase">
                           {day}
                         </h3>
                         <span className={`text-xs ${textMuted}`}>({dayItems.length} matkul)</span>
