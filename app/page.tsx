@@ -2,10 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { 
-  Clock, 
   MapPin, 
   User, 
-  Calendar, 
   BookOpen, 
   Dumbbell, 
   Plus, 
@@ -17,9 +15,7 @@ import {
   Check,
   CalendarRange,
   LayoutGrid,
-  ChevronRight,
-  Flame,
-  AlertCircle
+  AlertCircle,
 } from "lucide-react";
 
 interface ScheduleItem {
@@ -82,6 +78,32 @@ const schedulesData: ScheduleItem[] = [
 
 const daysList = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"] as const;
 
+const sortByStartTime = (items: ScheduleItem[]) =>
+  [...items].sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+const formatDateID = (value: string) => {
+  if (!value) return "-";
+  const date = new Date(`${value}T00:00:00`);
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+};
+
+const getDeadlineInfo = (deadline: string) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(`${deadline}T00:00:00`);
+  const diff = Math.ceil((due.getTime() - today.getTime()) / 86400000);
+
+  if (diff < 0) return { label: `Terlambat ${Math.abs(diff)} hari`, tone: "danger" };
+  if (diff === 0) return { label: "Hari ini", tone: "danger" };
+  if (diff === 1) return { label: "Besok", tone: "warning" };
+  if (diff <= 7) return { label: `${diff} hari lagi`, tone: "warning" };
+  return { label: formatDateID(deadline), tone: "muted" };
+};
+
 export default function Home() {
   const [isDark, setIsDark] = useState(true);
   const [activeTab, setActiveTab] = useState<"kuliah" | "tugas" | "olahraga">("kuliah");
@@ -98,6 +120,11 @@ export default function Home() {
   const [newType, setNewType] = useState<"individu" | "kelompok">("individu");
   const [newDeadline, setNewDeadline] = useState("");
   const [filterType, setFilterType] = useState<"semua" | "individu" | "kelompok">("semua");
+
+  const uniqueCourses = useMemo(() => {
+    return Array.from(new Map(schedulesData.map((item) => [item.name, item])).values())
+      .sort((a, b) => a.name.localeCompare(b.name, "id"));
+  }, []);
 
   // State Olahraga
   const [workouts, setWorkouts] = useState<Workout[]>([
@@ -220,7 +247,7 @@ export default function Home() {
   };
 
   const currentDaySchedules = useMemo(() => {
-    return schedulesData.filter(s => s.day === selectedDay);
+    return sortByStartTime(schedulesData.filter(s => s.day === selectedDay));
   }, [selectedDay]);
 
   const totalSksCurrentDay = currentDaySchedules.reduce((acc, curr) => acc + curr.sks, 0);
@@ -228,7 +255,7 @@ export default function Home() {
   // Status Kuliah Realtime
   const nextClassToday = useMemo(() => {
     if (!daysList.includes(todayName as any)) return null;
-    const todayList = schedulesData.filter(s => s.day === todayName);
+    const todayList = sortByStartTime(schedulesData.filter(s => s.day === todayName));
     if (todayList.length === 0) return null;
 
     const [curHour, curMin] = clock.time.split(":").map(Number);
@@ -251,6 +278,13 @@ export default function Home() {
     return { status: "finished" };
   }, [todayName, clock.time]);
 
+  const activeAssignments = assignments.filter((task) => !task.completed);
+  const completedWorkouts = workouts.filter((workout) => workout.completed).length;
+  const todaySchedules = todayName && daysList.includes(todayName as any)
+    ? sortByStartTime(schedulesData.filter((item) => item.day === todayName))
+    : [];
+  const todaySks = todaySchedules.reduce((total, item) => total + item.sks, 0);
+
   // Design Tokens (Soft Slate-Zinc & Soft Accent)
   const bgMain = isDark ? "bg-[#0c0f17] text-slate-100" : "bg-[#f8fafc] text-slate-900";
   const cardSurface = isDark ? "bg-[#141824] border-slate-800/80" : "bg-white border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.03)]";
@@ -259,7 +293,7 @@ export default function Home() {
   const badgeMuted = isDark ? "bg-slate-800/80 text-slate-300" : "bg-slate-100 text-slate-700";
 
   return (
-    <div className={`min-h-screen transition-colors duration-200 font-sans ${bgMain} pb-24 selection:bg-amber-500/20`}>
+    <div className={`${isDark ? "dark" : ""} min-h-screen transition-colors duration-200 font-sans ${bgMain} pb-24 selection:bg-amber-500/20`}>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 sm:pt-9 space-y-6">
         
         {/* Top Navbar */}
@@ -346,6 +380,30 @@ export default function Home() {
                   <div className={`text-[10px] font-bold uppercase tracking-wider ${textSubtle}`}>WIB Realtime</div>
                 </div>
               </div>
+            </div>
+
+            {/* Ringkasan Hari Ini */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {[
+                { label: "SKS hari ini", value: todaySks, suffix: "SKS", icon: BookOpen },
+                { label: "Kelas hari ini", value: todaySchedules.length, suffix: "kelas", icon: CalendarRange },
+                { label: "Tugas aktif", value: activeAssignments.length, suffix: "tugas", icon: AlertCircle },
+                { label: "Latihan selesai", value: completedWorkouts, suffix: `/${workouts.length}`, icon: Dumbbell },
+              ].map((stat) => {
+                const Icon = stat.icon;
+                return (
+                  <div key={stat.label} className={`p-3.5 rounded-xl border ${cardSurface}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-[10px] font-bold uppercase tracking-wide ${textSubtle}`}>{stat.label}</span>
+                      <Icon className="w-3.5 h-3.5 text-amber-500" />
+                    </div>
+                    <div className="mt-1.5 flex items-baseline gap-1.5">
+                      <span className="text-xl font-black">{stat.value}</span>
+                      <span className={`text-[10px] font-bold ${textSubtle}`}>{stat.suffix}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* View Mode Bar */}
@@ -470,47 +528,54 @@ export default function Home() {
 
             {/* Mode 2: Tampilan Rangkaian Semua Jadwal */}
             {viewMode === "semua" && (
-              <div className="space-y-6">
+              <div className="space-y-5">
                 {daysList.map((day) => {
-                  const dayItems = schedulesData.filter(s => s.day === day);
-                  if (dayItems.length === 0) return null;
+                  const dayItems = sortByStartTime(schedulesData.filter((s) => s.day === day));
+                  const isToday = todayName === day;
+                  if (dayItems.length === 0) return (
+                    <div key={day} className={`p-4 rounded-xl border border-dashed ${cardSurface}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-sm">{day}</span>
+                        <span className={`text-[11px] ${textSubtle}`}>Tidak ada kuliah</span>
+                      </div>
+                    </div>
+                  );
                   return (
-                    <div key={day} className="space-y-2.5">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-amber-500" />
-                        <h3 className="font-black text-sm uppercase tracking-wide">
-                          {day}
-                        </h3>
-                        <span className={`text-xs font-semibold ${textSubtle}`}>&bull; {dayItems.length} Mata Kuliah</span>
+                    <section key={day} className={`space-y-2.5 ${isToday ? "" : ""}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-500" />
+                          <h3 className="font-black text-sm uppercase tracking-wide">{day}</h3>
+                          {isToday && (
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">Hari ini</span>
+                          )}
+                        </div>
+                        <span className={`text-[11px] font-semibold ${textSubtle}`}>{dayItems.length} kelas</span>
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="relative ml-1.5 pl-5 space-y-2.5 border-l border-slate-200 dark:border-slate-800">
                         {dayItems.map((item) => (
-                          <div
-                            key={item.no}
-                            className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${cardSurface}`}
-                          >
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs font-black text-amber-500 font-mono">
-                                  {item.startTime} - {item.endTime}
-                                </span>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${badgeMuted}`}>
-                                  {item.type} ({item.sks} SKS)
-                                </span>
+                          <div key={item.no} className={`relative p-4 rounded-xl border ${cardSurface} hover:border-amber-500/40 transition-all`}>
+                            <span className="absolute -left-[25px] top-5 w-2.5 h-2.5 rounded-full bg-amber-500 ring-4 ring-[#0c0f17] dark:ring-[#0c0f17]" />
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                                  <span className="text-xs font-black font-mono text-amber-500">{item.startTime}–{item.endTime}</span>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${badgeMuted}`}>{item.type}</span>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${badgeMuted}`}>{item.sks} SKS</span>
+                                </div>
+                                <h4 className="font-bold text-sm leading-snug">{item.name}</h4>
+                                <p className={`text-xs mt-1 ${textSubtle}`}>{item.room}</p>
                               </div>
-                              <h4 className="font-bold text-sm">{item.name}</h4>
-                              <p className={`text-xs mt-0.5 ${textSubtle}`}>{item.room}</p>
-                            </div>
-
-                            <div className={`text-xs sm:text-right ${textSubtle}`}>
-                              <div className="font-medium">{item.lecturer}</div>
-                              <span className="text-[11px] font-mono">{item.code} &bull; {item.rombel}</span>
+                              <div className={`text-[11px] sm:text-right ${textSubtle}`}>
+                                <div className="font-medium">{item.lecturer}</div>
+                                <div className="font-mono mt-0.5">{item.code} · {item.rombel}</div>
+                              </div>
                             </div>
                           </div>
                         ))}
                       </div>
-                    </div>
+                    </section>
                   );
                 })}
               </div>
@@ -535,9 +600,9 @@ export default function Home() {
                     onChange={(e) => setSelectedCourse(e.target.value)}
                     className={`w-full rounded-xl px-3 py-2 text-xs outline-none border font-medium ${innerSurface}`}
                   >
-                    {schedulesData.map((s) => (
-                      <option key={s.no} value={s.name} className="bg-slate-900 text-white">
-                        {s.name} ({s.day})
+                    {uniqueCourses.map((s) => (
+                      <option key={s.name} value={s.name} className="bg-slate-900 text-white">
+                        {s.name}
                       </option>
                     ))}
                   </select>
