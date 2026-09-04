@@ -78,6 +78,12 @@ const schedulesData: ScheduleItem[] = [
 
 const daysList = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"] as const;
 
+// Helper konversi string jam "HH:MM" menjadi total menit
+const minutes = (timeStr: string) => {
+  const [h, m] = timeStr.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+
 const sortByStartTime = (items: ScheduleItem[]) =>
   [...items].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
@@ -259,8 +265,6 @@ export default function Home() {
     return sortByStartTime(schedulesData.filter(s => s.day === selectedDay));
   }, [selectedDay]);
 
-  const totalSksCurrentDay = currentDaySchedules.reduce((acc, curr) => acc + curr.sks, 0);
-
   // Status Kuliah Realtime
   const nextClassToday = useMemo(() => {
     if (!daysList.includes(todayName as any)) return null;
@@ -268,7 +272,7 @@ export default function Home() {
     if (todayList.length === 0) return null;
 
     const [curHour, curMin, curSec] = clock.time.split(":").map(Number);
-    const curTotalMin = curHour * 60 + curMin + curSec / 60;
+    const curTotalMin = curHour * 60 + curMin + (curSec || 0) / 60;
 
     for (const item of todayList) {
       const startTotalMin = minutes(item.startTime);
@@ -290,7 +294,7 @@ export default function Home() {
       }
     }
 
-    return { status: "finished" };
+    return { status: "finished" as const };
   }, [todayName, clock.time]);
 
   const activeAssignments = assignments.filter((task) => !task.completed);
@@ -300,7 +304,7 @@ export default function Home() {
     : [];
   const todaySks = todaySchedules.reduce((total, item) => total + item.sks, 0);
 
-  // Design Tokens (Soft Slate-Zinc & Soft Accent)
+  // Design Tokens
   const bgMain = isDark ? "bg-[#0c0f17] text-slate-100" : "bg-[#f8fafc] text-slate-900";
   const cardSurface = isDark ? "bg-[#141824] border-slate-800/80" : "bg-white border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.03)]";
   const innerSurface = isDark ? "bg-[#1b2030]/80 border-slate-800" : "bg-slate-50 border-slate-200/80";
@@ -385,7 +389,7 @@ export default function Home() {
                             {nextClassToday.item.room}
                           </span>
                           <span className="font-bold text-emerald-500">
-                            {formatClassCountdown(nextClassToday.remainingMin, "Berakhir dalam ")}
+                            {formatClassCountdown(nextClassToday.remainingMin ?? 0, "Berakhir dalam ")}
                           </span>
                         </div>
                       </div>
@@ -479,7 +483,7 @@ export default function Home() {
             {/* Mode 1: Tampilan Per Hari */}
             {viewMode === "perHari" && (
               <div className="space-y-4">
-                {/* Selector Hari Bersih */}
+                {/* Selector Hari */}
                 <div className="grid grid-cols-5 gap-2">
                   {daysList.map((day) => {
                     const isSelected = selectedDay === day;
@@ -571,7 +575,7 @@ export default function Home() {
               </div>
             )}
 
-            {/* Mode 2: Tampilan Rangkaian Semua Jadwal */}
+            {/* Mode 2: Rangkaian Semua Jadwal */}
             {viewMode === "semua" && (
               <div className="space-y-5">
                 {daysList.map((day) => {
@@ -586,7 +590,7 @@ export default function Home() {
                     </div>
                   );
                   return (
-                    <section key={day} className={`space-y-2.5 ${isToday ? "" : ""}`}>
+                    <section key={day} className="space-y-2.5">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-amber-500" />
@@ -734,45 +738,56 @@ export default function Home() {
 
               {assignments
                 .filter(a => filterType === "semua" || a.type === filterType)
-                .map((task) => (
-                  <div
-                    key={task.id}
-                    className={`p-4 rounded-xl border flex items-center justify-between gap-3 transition ${cardSurface} ${
-                      task.completed ? "opacity-50" : ""
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setAssignments(assignments.map(a => a.id === task.id ? { ...a, completed: !a.completed } : a))}
-                        className="text-slate-400 hover:text-amber-500 transition"
-                      >
-                        {task.completed ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Circle className="w-5 h-5" />}
-                      </button>
-                      <div>
-                        <div className={`text-sm font-bold ${task.completed ? "line-through text-slate-500" : ""}`}>
-                          {task.title}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px]">
-                          <span className={`px-2 py-0.5 rounded font-semibold ${badgeMuted}`}>{task.courseName}</span>
-                          <span className={textSubtle}>Hari: {task.day}</span>
-                          <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
-                            task.type === "kelompok" ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                          }`}>
-                            {task.type}
-                          </span>
-                          <span className="text-rose-500 font-bold">Deadline: {task.deadline}</span>
+                .map((task) => {
+                  const deadlineInfo = getDeadlineInfo(task.deadline);
+                  return (
+                    <div
+                      key={task.id}
+                      className={`p-4 rounded-xl border flex items-center justify-between gap-3 transition ${cardSurface} ${
+                        task.completed ? "opacity-50" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setAssignments(assignments.map(a => a.id === task.id ? { ...a, completed: !a.completed } : a))}
+                          className="text-slate-400 hover:text-amber-500 transition"
+                        >
+                          {task.completed ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Circle className="w-5 h-5" />}
+                        </button>
+                        <div>
+                          <div className={`text-sm font-bold ${task.completed ? "line-through text-slate-500" : ""}`}>
+                            {task.title}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px]">
+                            <span className={`px-2 py-0.5 rounded font-semibold ${badgeMuted}`}>{task.courseName}</span>
+                            <span className={textSubtle}>Hari: {task.day}</span>
+                            <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                              task.type === "kelompok" ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                            }`}>
+                              {task.type}
+                            </span>
+                            <span className={`font-bold ${
+                              deadlineInfo.tone === "danger" 
+                                ? "text-rose-500" 
+                                : deadlineInfo.tone === "warning" 
+                                ? "text-amber-500" 
+                                : textSubtle
+                            }`}>
+                              Deadline: {deadlineInfo.label}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <button
-                      onClick={() => setAssignments(assignments.filter(a => a.id !== task.id))}
-                      className="text-slate-400 hover:text-rose-500 p-1"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                      <button
+                        onClick={() => setAssignments(assignments.filter(a => a.id !== task.id))}
+                        className="text-slate-400 hover:text-rose-500 p-1"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         )}
