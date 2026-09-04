@@ -91,6 +91,15 @@ const formatDateID = (value: string) => {
   }).format(date);
 };
 
+const formatClassCountdown = (totalMinutes: number, prefix = "") => {
+  const rounded = Math.max(0, Math.ceil(totalMinutes));
+  const hours = Math.floor(rounded / 60);
+  const mins = rounded % 60;
+
+  if (hours > 0) return `${prefix}${hours}j ${mins}m`;
+  return `${prefix}${mins}m`;
+};
+
 const getDeadlineInfo = (deadline: string) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -258,20 +267,26 @@ export default function Home() {
     const todayList = sortByStartTime(schedulesData.filter(s => s.day === todayName));
     if (todayList.length === 0) return null;
 
-    const [curHour, curMin] = clock.time.split(":").map(Number);
-    const curTotalMin = curHour * 60 + curMin;
+    const [curHour, curMin, curSec] = clock.time.split(":").map(Number);
+    const curTotalMin = curHour * 60 + curMin + curSec / 60;
 
     for (const item of todayList) {
-      const [startH, startM] = item.startTime.split(":").map(Number);
-      const [endH, endM] = item.endTime.split(":").map(Number);
-      const startTotalMin = startH * 60 + startM;
-      const endTotalMin = endH * 60 + endM;
+      const startTotalMin = minutes(item.startTime);
+      const endTotalMin = minutes(item.endTime);
 
-      if (curTotalMin >= startTotalMin && curTotalMin <= endTotalMin) {
-        return { status: "ongoing", item };
+      if (curTotalMin >= startTotalMin && curTotalMin < endTotalMin) {
+        return {
+          status: "ongoing" as const,
+          item,
+          remainingMin: endTotalMin - curTotalMin,
+        };
       }
       if (curTotalMin < startTotalMin) {
-        return { status: "upcoming", item, diffMin: startTotalMin - curTotalMin };
+        return {
+          status: "upcoming" as const,
+          item,
+          diffMin: startTotalMin - curTotalMin,
+        };
       }
     }
 
@@ -354,15 +369,45 @@ export default function Home() {
                   <h2 className="text-xl sm:text-2xl font-black tracking-tight">{clock.date}</h2>
                   <div className={`text-xs pt-0.5 ${textSubtle}`}>
                     {nextClassToday?.status === "ongoing" && nextClassToday.item && (
-                      <span className="text-emerald-500 font-semibold flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                        Sedang berlangsung: {nextClassToday.item.name} ({nextClassToday.item.startTime} - {nextClassToday.item.endTime})
-                      </span>
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="inline-flex items-center gap-1.5 font-bold text-emerald-500">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            Sedang berlangsung
+                          </span>
+                          <span className={textSubtle}>•</span>
+                          <span className="font-semibold">{nextClassToday.item.name}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                          <span>{nextClassToday.item.startTime}–{nextClassToday.item.endTime}</span>
+                          <span className="inline-flex items-center gap-1 font-semibold">
+                            <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                            {nextClassToday.item.room}
+                          </span>
+                          <span className="font-bold text-emerald-500">
+                            {formatClassCountdown(nextClassToday.remainingMin, "Berakhir dalam ")}
+                          </span>
+                        </div>
+                      </div>
                     )}
                     {nextClassToday?.status === "upcoming" && nextClassToday.item && (
-                      <span>
-                        Kuliah berikutnya: <strong className="text-amber-500 font-bold">{nextClassToday.item.name}</strong> ({nextClassToday.item.startTime}) &bull; {Math.floor((nextClassToday.diffMin ?? 0) / 60)}j {(nextClassToday.diffMin ?? 0) % 60}m lagi
-                      </span>
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="font-bold text-amber-500">Kuliah berikutnya</span>
+                          <span className={textSubtle}>•</span>
+                          <span className="font-semibold">{nextClassToday.item.name}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                          <span>{nextClassToday.item.startTime}–{nextClassToday.item.endTime}</span>
+                          <span className="inline-flex items-center gap-1 font-semibold">
+                            <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                            {nextClassToday.item.room}
+                          </span>
+                          <span className="font-bold text-amber-500">
+                            {formatClassCountdown(nextClassToday.diffMin ?? 0)} lagi
+                          </span>
+                        </div>
+                      </div>
                     )}
                     {nextClassToday?.status === "finished" && (
                       <span>Seluruh perkuliahan hari ini telah selesai. Waktu istirahat & review tugas.</span>
